@@ -10,7 +10,7 @@ import { Snackbar, SnackbarType } from "../components/ui/Snackbar";
 interface SnackbarOptions {
   message: string;
   type?: SnackbarType;
-  duration?: number; // ms, default 3000
+  duration?: number;
 }
 
 interface SnackbarContextValue {

@@ -2,15 +2,21 @@ import "../global.css";
 import { useEffect } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { PreferencesProvider } from "../context/PreferencesContext";
 import { SnackbarProvider } from "../context/SnackbarContext";
+import { OfflineBanner } from "../components/ui";
 import { View, ActivityIndicator } from "react-native";
+import { notificationService } from "../services/notificationService";
 
 function RootGuard() {
   const { token, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-
   useEffect(() => {
+
+    notificationService.registerForNotifications();
+    notificationService.scheduleInactivityReminder();
+
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
@@ -36,9 +42,12 @@ function RootGuard() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <SnackbarProvider>
-        <RootGuard />
-      </SnackbarProvider>
+      <PreferencesProvider>
+        <OfflineBanner />
+        <SnackbarProvider>
+          <RootGuard />
+        </SnackbarProvider>
+      </PreferencesProvider>
     </AuthProvider>
   );
 }

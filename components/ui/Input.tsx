@@ -37,14 +37,14 @@ export function Input({
 
   return (
     <View className={`gap-1 ${containerClassName}`}>
-      {/* Label */}
+      
       {label && (
         <Text className={`text-sm font-medium text-gray-700 ${labelClassName}`}>
           {label}
         </Text>
       )}
 
-      {/* Input row */}
+      
       <View
         className={`
           flex-row items-center
@@ -61,7 +61,7 @@ export function Input({
           {...rest}
         />
 
-        {/* Password toggle */}
+        
         {isPassword && (
           <TouchableOpacity
             onPress={() => setVisible((v) => !v)}
@@ -76,7 +76,7 @@ export function Input({
         {rightIcon && !isPassword && <View className="ml-2">{rightIcon}</View>}
       </View>
 
-      {/* Error */}
+      
       {hasError && (
         <Text className={`text-xs text-red-500 ${errorClassName}`}>
           {error}

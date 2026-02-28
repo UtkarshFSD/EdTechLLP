@@ -57,7 +57,6 @@ export default function LoginScreen() {
         contentContainerClassName="flex-grow justify-center px-6 py-12"
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View className="mb-10">
           <Text className="text-3xl font-bold text-gray-900">Welcome back</Text>
           <Text className="text-base text-gray-500 mt-2">
@@ -65,11 +64,10 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Form */}
         <View className="gap-4">
           <Input
             label="Username"
-            placeholder="utkarshrai"
+            placeholder="johndoe"
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
@@ -93,7 +91,6 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Footer */}
         <View className="flex-row justify-center mt-8 gap-1">
           <Text className="text-gray-500">Don't have an account?</Text>
           <Link href="/(auth)/register">

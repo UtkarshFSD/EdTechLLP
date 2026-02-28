@@ -2,8 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 const BASE_URL = "https://api.freeapi.app/api/v1";
 const TOKEN_KEY = "auth_token";
-
-// ─── Custom Error ─────────────────────────────────────────────────────────────
+export const REFRESH_TOKEN_KEY = "auth_refresh_token";
 
 export class ApiError extends Error {
   constructor(
@@ -15,8 +14,6 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type Body = Record<string, unknown> | FormData;
 
@@ -44,8 +41,6 @@ async function parseResponse<T>(res: Response): Promise<T> {
     throw new ApiError(res.status, message, payload);
   }
 
-  // freeapi.app wraps every response: { statusCode, data, message, success }
-  // Unwrap `data` when present so callers receive the inner payload directly.
   if (
     isJson &&
     payload !== null &&
@@ -58,47 +53,89 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return payload as T;
 }
 
-// ─── Core request — with one silent token-refresh retry on 401 ────────────────
+const DEFAULT_TIMEOUT = 10000;
+const MAX_RETRIES = 2;
 
 async function send<T>(
   method: string,
   endpoint: string,
   body?: Body,
-  isRetry = false,
+  retryCount = 0,
 ): Promise<T> {
   const isFormData = body instanceof FormData;
   const headers = await getAuthHeaders(isFormData);
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    method,
-    headers,
-    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
 
-  // Silent token refresh: attempt once then retry
-  if (res.status === 401 && !isRetry) {
-    try {
-      const refreshRes = await fetch(`${BASE_URL}/users/refresh-token`, {
-        method: "POST",
-        headers: await getAuthHeaders(false),
-      });
+  try {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method,
+      headers,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
+      signal: controller.signal,
+    });
 
-      if (refreshRes.ok) {
-        const { token } = await refreshRes.json();
-        await SecureStore.setItemAsync(TOKEN_KEY, token);
-        return send<T>(method, endpoint, body, true); // retry original
-      }
-    } catch {
-      // refresh failed — fall through and let the 401 throw
+    clearTimeout(timeoutId);
+
+    if (res.status === 401 && retryCount === 0) {
+      try {
+        const storedRefreshToken =
+          await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+        const refreshRes = await fetch(`${BASE_URL}/users/refresh-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          ...(storedRefreshToken && {
+            body: JSON.stringify({ refreshToken: storedRefreshToken }),
+          }),
+        });
+
+        if (refreshRes.ok) {
+          const json = await refreshRes.json();
+          const data = json?.data ?? json;
+          const newAccessToken = data.accessToken ?? data.token;
+          const newRefreshToken = data.refreshToken;
+
+          await SecureStore.setItemAsync(TOKEN_KEY, newAccessToken);
+          if (newRefreshToken) {
+            await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+          }
+          return send<T>(method, endpoint, body, 1);
+        }
+      } catch (err) {}
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     }
 
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    const shouldRetry =
+      !res.ok &&
+      res.status !== 401 &&
+      res.status !== 403 &&
+      res.status !== 404 &&
+      retryCount < MAX_RETRIES;
+
+    if (shouldRetry) {
+      return send<T>(method, endpoint, body, retryCount + 1);
+    }
+
+    return parseResponse<T>(res);
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+
+    if (error.name === "AbortError") {
+      throw new ApiError(
+        408,
+        "Request timed out. Please check your connection.",
+      );
+    }
+
+    if (retryCount < MAX_RETRIES) {
+      return send<T>(method, endpoint, body, retryCount + 1);
+    }
+
+    throw error;
   }
-
-  return parseResponse<T>(res);
 }
-
-// ─── Public API Client ────────────────────────────────────────────────────────
 
 export const api = {
   get: <T>(endpoint: string) => send<T>("GET", endpoint),

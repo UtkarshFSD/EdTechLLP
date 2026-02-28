@@ -6,9 +6,7 @@ import React, {
   useState,
 } from "react";
 import * as SecureStore from "expo-secure-store";
-import { api } from "../services/api";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { api, REFRESH_TOKEN_KEY } from "../services/api";
 
 interface User {
   id: string;
@@ -30,18 +28,18 @@ interface AuthContextValue extends AuthState {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<string | null>;
+  updateAvatar: (formData: FormData) => Promise<void>;
+  updateProfile: (data: {
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+  }) => Promise<void>;
 }
-
-// ─── Secure Store Keys ────────────────────────────────────────────────────────
 
 export const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
 
-// ─── Context ──────────────────────────────────────────────────────────────────
-
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -50,7 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
   });
 
-  // ── Auto-login on mount ───────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -70,27 +67,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // ── Persist helpers ───────────────────────────────────────────────────────
-  const persistSession = async (token: string, user: User) => {
+  const persistSession = async (
+    accessToken: string,
+    refreshToken: string,
+    user: User,
+  ) => {
     await Promise.all([
-      SecureStore.setItemAsync(TOKEN_KEY, token),
+      SecureStore.setItemAsync(TOKEN_KEY, accessToken),
+      SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken),
       SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)),
     ]);
-    setState({ user, token, isLoading: false });
+    setState({ user, token: accessToken, isLoading: false });
   };
 
   const clearSession = async () => {
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_KEY),
+      SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
       SecureStore.deleteItemAsync(USER_KEY),
     ]);
     setState({ user: null, token: null, isLoading: false });
   };
 
-  // ── Auth actions ──────────────────────────────────────────────────────────
-
-  // freeapi login response (after envelope unwrap):
-  // { user: {..., _id, username}, accessToken, refreshToken }
   const login = useCallback(async (username: string, password: string) => {
     const res = await api.post<{
       user: {
@@ -113,19 +111,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       avatar_url: res.user.avatar?.url,
       isEmailVerified: res.user.isEmailVerified,
     };
-    await persistSession(res.accessToken, user);
+    await persistSession(res.accessToken, res.refreshToken, user);
   }, []);
 
-  // freeapi register response (after envelope unwrap):
-  // { user: {...} }  — no token; must verify email before logging in
   const register = useCallback(
     async (username: string, email: string, password: string) => {
       await api.post<{ user: unknown }>("/users/register", {
         username,
         email,
         password,
+        role: "USER",
       });
-      // No session persisted — user must log in after email verification.
+    },
+    [],
+  );
+
+  const updateAvatar = useCallback(async (formData: FormData) => {
+    const res = await api.patch<{
+      avatar: { url: string };
+    }>("/users/avatar", formData);
+
+    setState((s) => {
+      if (!s.user) return s;
+      const newUser = { ...s.user, avatar_url: res.avatar.url };
+      SecureStore.setItemAsync(USER_KEY, JSON.stringify(newUser));
+      return { ...s, user: newUser };
+    });
+  }, []);
+
+  const updateProfile = useCallback(
+    async (data: {
+      firstName: string;
+      lastName: string;
+      phoneNumber: string;
+    }) => {
+      const res = await api.patch<{
+        _id: string;
+        username: string;
+        email: string;
+        role: string;
+        avatar: { url: string };
+        isEmailVerified: boolean;
+      }>("/users/account", data);
+
+      setState((s) => {
+        if (!s.user) return s;
+        const newUser: User = {
+          id: res._id,
+          username: res.username,
+          email: res.email,
+          role: res.role,
+          avatar_url: res.avatar?.url,
+          isEmailVerified: res.isEmailVerified,
+        };
+        SecureStore.setItemAsync(USER_KEY, JSON.stringify(newUser));
+        return { ...s, user: newUser };
+      });
     },
     [],
   );
@@ -133,8 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await api.post("/users/logout");
-    } catch {
-      // best-effort; clear locally regardless
+    } catch (err) {
     } finally {
       await clearSession();
     }
@@ -142,10 +182,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshToken = useCallback(async (): Promise<string | null> => {
     try {
-      const res = await api.post<{ token: string }>("/users/refresh-token");
-      await SecureStore.setItemAsync(TOKEN_KEY, res.token);
-      setState((s) => ({ ...s, token: res.token }));
-      return res.token;
+      const storedRefreshToken =
+        await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      const res = await api.post<{
+        accessToken: string;
+        refreshToken?: string;
+      }>(
+        "/users/refresh-token",
+        storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
+      );
+      await SecureStore.setItemAsync(TOKEN_KEY, res.accessToken);
+      if (res.refreshToken) {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, res.refreshToken);
+      }
+      setState((s) => ({ ...s, token: res.accessToken }));
+      return res.accessToken;
     } catch {
       await clearSession();
       return null;
@@ -154,14 +205,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ ...state, login, register, logout, refreshToken }}
+      value={{
+        ...state,
+        login,
+        register,
+        logout,
+        refreshToken,
+        updateAvatar,
+        updateProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);

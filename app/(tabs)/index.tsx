@@ -27,22 +27,19 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 px-6 pt-16">
-      {/* Greeting */}
       <View className="mb-8">
         <Text className="text-2xl font-bold text-gray-900">
-          Hello, {user?.name ?? "there"} 👋
+          Hello, {user?.username ?? "there"} 👋
         </Text>
         <Text className="text-sm text-gray-500 mt-1">{user?.email}</Text>
       </View>
 
-      {/* Placeholder content */}
       <View className="flex-1 items-center justify-center">
         <Text className="text-gray-400 text-base">
           Your home screen content goes here
         </Text>
       </View>
 
-      {/* Logout */}
       <Button
         label="Logout"
         variant="outline"

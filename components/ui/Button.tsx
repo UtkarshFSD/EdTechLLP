@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
@@ -23,7 +23,7 @@ interface ButtonProps extends TouchableOpacityProps {
   labelClassName?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 const variantStyles: Record<Variant, { container: string; label: string }> = {
   primary: {
@@ -54,7 +54,7 @@ const sizeStyles: Record<Size, { container: string; label: string }> = {
   lg: { container: "px-6 py-4 rounded-2xl", label: "text-lg" },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 export function Button({
   label,

@@ -65,7 +65,6 @@ export default function RegisterScreen() {
         contentContainerClassName="flex-grow justify-center px-6 py-12"
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View className="mb-10">
           <Text className="text-3xl font-bold text-gray-900">
             Create account
@@ -75,11 +74,10 @@ export default function RegisterScreen() {
           </Text>
         </View>
 
-        {/* Form */}
         <View className="gap-4">
           <Input
             label="Username"
-            placeholder="utkarshrai"
+            placeholder="johndoe"
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
@@ -113,7 +111,6 @@ export default function RegisterScreen() {
           />
         </View>
 
-        {/* Footer */}
         <View className="flex-row justify-center mt-8 gap-1">
           <Text className="text-gray-500">Already have an account?</Text>
           <Link href="/(auth)/login">
