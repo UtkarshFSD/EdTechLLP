@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "easybuyApp",
-    "slug": "easybuyApp",
+    "slug": "easybuyapp-edtech-v1",
     "scheme": "easybuyapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,6 +17,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.utkarshrai.easybuyapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,6 +30,12 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "130e4234-35d3-4c29-bba8-e9411c53b0b3"
+      }
+    }
   }
 }
